@@ -5,6 +5,7 @@ public class LOPCursor : MonoBehaviour {
 
     private Quaternion rotation;
     private Quaternion initialRotation;
+    private bool calibrate = true;
 
     public GameObject rotationMaster;
 
@@ -19,7 +20,6 @@ public class LOPCursor : MonoBehaviour {
             if (SystemInfo.supportsGyroscope) {
                 Input.gyro.enabled = true;
                 Input.compass.enabled = true;
-                initialRotation = Quaternion.Inverse(Input.gyro.attitude);
             }
         }
     }
@@ -28,10 +28,15 @@ public class LOPCursor : MonoBehaviour {
 
     void OnSerializeNetworkView(BitStream stream, NetworkMessageInfo info) {
         if (stream.isWriting) {
-            rotation = Input.gyro.attitude * initialRotation;
+            rotation = Input.gyro.attitude;
             stream.Serialize(ref rotation);
         } else {
             stream.Serialize(ref rotation);
+            if (calibrate) {
+                calibrate = false;
+                initialRotation = Quaternion.Inverse(rotation);
+            }
+            rotation = initialRotation * rotation;
             rotationMaster.transform.rotation = rotation;
         }
     }
@@ -53,10 +58,7 @@ public class LOPCursor : MonoBehaviour {
     void OnGUI() {
         if (Network.isClient) {
             GUILayout.Label("");
-            GUILayout.Label("Mag: " + Input.compass.rawVector);
-            GUILayout.Label("Acc: " + Input.acceleration);
-            GUILayout.Label("Gyro " + Input.gyro.rotationRate);
-            GUILayout.Label("Rotation " + rotation);
+            GUILayout.Label("Attitude: " + Input.gyro.attitude);
         }
     }
 }
