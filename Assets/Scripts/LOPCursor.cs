@@ -12,16 +12,14 @@ public class LOPCursor : MonoBehaviour {
     public GameObject rotationMaster;
 
     public GameObject cursorProj;
-    public Plane referencePlaneHorizontal;
-    public Plane referencePlaneVertical;
-    public int distance = 15;
+    public Plane referencePlane;
+    public int distance = 16;
 
     private string tapsandstuff = "";
     private string tapsandstuff2 = "";
 
     void Start() {
-        referencePlaneHorizontal = new Plane(Vector3.down, Vector3.zero);
-        referencePlaneVertical = new Plane(Vector3.back, Vector3.zero);
+        referencePlane = new Plane(Vector3.up, Vector3.zero);
 
         if (Network.isClient) {
             if (SystemInfo.supportsGyroscope) {
@@ -110,23 +108,14 @@ public class LOPCursor : MonoBehaviour {
             }
 
             // GYRO
-            Vector3 direction = rotation * Vector3.up;
-            Ray ray = new Ray(Vector3.down * distance, direction);
+            Vector3 direction = rotation * Vector3.down;
+            Ray ray = new Ray(Vector3.up * distance, direction);
             float rayDistance = 0;
-            float x = 0;
-            if (referencePlaneHorizontal.Raycast(ray, out rayDistance)) {
-                x = ray.GetPoint(rayDistance).x;
+            if (referencePlane.Raycast(ray, out rayDistance)) {
+                Vector3 point = ray.GetPoint(rayDistance);
+                smoothingQueue.Enqueue(new Vector3(-point.x, -point.z, 0));
             }
 
-            direction = rotation * Vector3.forward;
-            ray = new Ray(Vector3.back * distance, direction);
-            rayDistance = 0;
-            float y = 0;
-            if (referencePlaneVertical.Raycast(ray, out rayDistance)) {
-                y = -ray.GetPoint(rayDistance).y;
-            }
-
-            smoothingQueue.Enqueue(new Vector3(x, y, 0));
             if (smoothingQueue.Count >= 8) {
                 smoothingQueue.Dequeue();
             }
