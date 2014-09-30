@@ -8,7 +8,7 @@ public class NetworkManager : MonoBehaviour {
     private HostData[] hostList;
 
     // "143.54.13.225" UFRGS
-    private string ip = "143.54.13.225";
+    private string ip = "192.168.1.3";
     private int port = 19876; // this is the game port
     private int maxConnections = 4;
 
@@ -50,35 +50,7 @@ public class NetworkManager : MonoBehaviour {
     }
 
     void OnConnectedToServer() {
-        InstantiateUser();
-    }
-
-    private void InstantiateUser() {
         Network.Instantiate(networkObject, Vector3.zero, Quaternion.identity, 0);
-    }
-
-    #endregion
-
-    #region Message Exchange
-
-    [RPC]
-    public void OutMessage(string message) {
-        if (networkView.isMine) {
-            networkView.RPC("InMessage", RPCMode.Others, message);
-            Debug.Log("SERVER SENT: " + message);
-        } else {
-            networkView.RPC("InMessage", RPCMode.Server, message);
-            Debug.Log("CLIENT SENT: " + message);
-        }
-    }
-
-    [RPC]
-    void InMessage(string message) {
-        if (networkView.isMine) {
-            Debug.Log("SERVER RECEIVED: " + message);
-        } else {
-            Debug.Log("CLIENT RECEIVED: " + message);
-        }
     }
 
     #endregion

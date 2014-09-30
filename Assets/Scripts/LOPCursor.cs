@@ -9,14 +9,9 @@ public class LOPCursor : MonoBehaviour {
     private bool calibrate = true;
     private Queue<Vector3> smoothingQueue = new Queue<Vector3>(16);
 
-    public GameObject rotationMaster;
-
-    public GameObject cursorProj;
+    public GameObject cursor;
     public Plane referencePlane;
     public int distance = 16;
-
-    private string tapsandstuff = "";
-    private string tapsandstuff2 = "";
 
     void Start() {
         referencePlane = new Plane(Vector3.up, Vector3.zero);
@@ -42,7 +37,6 @@ public class LOPCursor : MonoBehaviour {
                 initialRotation = Quaternion.Inverse(rotation);
             }
             rotation = initialRotation * rotation;
-            rotationMaster.transform.rotation = rotation;
         }
     }
 
@@ -62,36 +56,68 @@ public class LOPCursor : MonoBehaviour {
     #region TouchEvents
 
     private void OnTap(Touch touch) {
-        tapsandstuff = "tap";
+        OutMessage("Tap");
     }
 
     private void OnDoubleTap(Touch touch) {
-        tapsandstuff += " double-tap ";
+        OutMessage("DoubleTap");
     }
 
     private void OnTouchMoved(Touch touch) {
-        tapsandstuff2 = touch.position.ToString();
+        OutMessage("Move: " + touch.position);
     }
 
     private void OnUntap(Touch touch) {
-        tapsandstuff += " untap ";
+        OutMessage("Untap");
+    }
+
+    #endregion
+
+    #region Message Exchange
+
+    [RPC]
+    public void OutMessage(string message) {
+        if (networkView.isMine) {
+            networkView.RPC("InMessage", RPCMode.Others, message);
+            Debug.Log("SERVER SENT: " + message);
+        } else {
+            networkView.RPC("InMessage", RPCMode.Server, message);
+            Debug.Log("CLIENT SENT: " + message);
+        }
+    }
+
+    [RPC]
+    void InMessage(string message) {
+        if (networkView.isMine) {
+            Debug.Log("SERVER RECEIVED: " + message);
+        } else {
+            Debug.Log("CLIENT RECEIVED: " + message);
+        }
     }
 
     #endregion
 
     void Update() {
-        if (Network.isServer) {
+        if (Network.isServer) { // ON SERVER
+            // GYRO
+            Vector3 direction = rotation * Vector3.down;
+            Ray ray = new Ray(Vector3.up * distance, direction);
+            float rayDistance = 0;
+            if (referencePlane.Raycast(ray, out rayDistance)) {
+                Vector3 point = ray.GetPoint(rayDistance);
+                smoothingQueue.Enqueue(new Vector3(-point.x, -point.z, 0));
+            }
+
+            if (smoothingQueue.Count >= 8) {
+                smoothingQueue.Dequeue();
+            }
+
+            cursor.transform.position = MediumPosition();
+        } else { // ON CLIENT
             // TOUCH
             foreach (Touch touch in Input.touches) {
                 switch (touch.phase) {
                     case TouchPhase.Began:
-                        //bool didDoubleTap;
-                        //touching = true;
-                        //if (doubleTapTime > 0 && doubleTapTime < 0.3f) {
-                        //    doubleTapTime = 0;
-                        //    didDoubleTap = true;
-                        //    OnDoubleTap(touch);
-                        //}
                         if (touch.tapCount > 1) {
                             OnDoubleTap(touch);
                         } else {
@@ -106,21 +132,6 @@ public class LOPCursor : MonoBehaviour {
                         break;
                 }
             }
-
-            // GYRO
-            Vector3 direction = rotation * Vector3.down;
-            Ray ray = new Ray(Vector3.up * distance, direction);
-            float rayDistance = 0;
-            if (referencePlane.Raycast(ray, out rayDistance)) {
-                Vector3 point = ray.GetPoint(rayDistance);
-                smoothingQueue.Enqueue(new Vector3(-point.x, -point.z, 0));
-            }
-
-            if (smoothingQueue.Count >= 8) {
-                smoothingQueue.Dequeue();
-            }
-
-            cursorProj.transform.position = MediumPosition();
         }
     }
 
@@ -129,8 +140,6 @@ public class LOPCursor : MonoBehaviour {
             if (GUI.Button(new Rect(10, 150, 150, 100), "recalibrate")) {
                 calibrate = true;
             }
-            GUI.Label(new Rect(10, 270, 150, 40), tapsandstuff);
-            GUI.Label(new Rect(10, 310, 150, 40), tapsandstuff2);
         }
     }
 }

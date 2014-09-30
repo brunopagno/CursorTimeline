@@ -169,8 +169,8 @@ GameObject:
   - 4: {fileID: 946621309}
   - 114: {fileID: 946621310}
   m_Layer: 0
-  m_Name: ScriptController
-  m_TagString: Untagged
+  m_Name: NetworkManager
+  m_TagString: NetworkManager
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
