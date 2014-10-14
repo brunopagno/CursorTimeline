@@ -74,11 +74,9 @@ public class NetworkManager : MonoBehaviour {
                     }
                 }
                 break;
-            case NetworkPeerType.Server:
-                GUILayout.Label("Server");
-                break;
+            //case NetworkPeerType.Server:
+            //    break;
             case NetworkPeerType.Client:
-                GUILayout.Label("Client");
                 if (GUI.Button(new Rect(150, 10, 200, 140), "Disconnect")) {
                     Disconnect();
                 }

@@ -2,18 +2,33 @@
 using System.Collections;
 using System.Collections.Generic;
 
+public enum CursorState {
+    Normal,
+    Focus
+}
+
 public class LOPCursor : MonoBehaviour {
 
     private Quaternion rotation;
     private Quaternion initialRotation;
-    private bool calibrate = true;
+    private bool calibrate;
     private Queue<Vector3> smoothingQueue = new Queue<Vector3>(16);
+    private CursorState state;
+    private CursorState State {
+        get {
+            return state;
+        }
+        set {
+            state = value;
+        }
+    }
 
     public GameObject cursor;
     public Plane referencePlane;
     public int distance = 16;
 
     void Start() {
+        calibrate = true;
         referencePlane = new Plane(Vector3.up, Vector3.zero);
 
         if (Network.isClient) {
@@ -22,6 +37,8 @@ public class LOPCursor : MonoBehaviour {
                 Input.compass.enabled = true;
             }
         }
+
+        State = CursorState.Normal;
     }
 
     #region NetworkViewSync
@@ -33,8 +50,10 @@ public class LOPCursor : MonoBehaviour {
         } else {
             stream.Serialize(ref rotation);
             if (calibrate) {
-                calibrate = false;
                 initialRotation = Quaternion.Inverse(rotation);
+                if (initialRotation.x != 0 || initialRotation.y != 0 || initialRotation.z != 0 || initialRotation.w != 0) {
+                    calibrate = false;
+                }
             }
             rotation = initialRotation * rotation;
         }
@@ -56,19 +75,17 @@ public class LOPCursor : MonoBehaviour {
     #region TouchEvents
 
     private void OnTap(Touch touch) {
-        OutMessage("Tap");
+        Focus(string.Empty);
     }
 
     private void OnDoubleTap(Touch touch) {
-        OutMessage("DoubleTap");
     }
 
     private void OnTouchMoved(Touch touch) {
-        OutMessage("Move: " + touch.position);
     }
 
     private void OnUntap(Touch touch) {
-        OutMessage("Untap");
+        Unfocus(string.Empty);
     }
 
     #endregion
@@ -76,22 +93,29 @@ public class LOPCursor : MonoBehaviour {
     #region Message Exchange
 
     [RPC]
-    public void OutMessage(string message) {
+    public void Calibrate(string message) {
         if (networkView.isMine) {
-            networkView.RPC("InMessage", RPCMode.Others, message);
-            Debug.Log("SERVER SENT: " + message);
+            networkView.RPC("Calibrate", RPCMode.Others, message);
         } else {
-            networkView.RPC("InMessage", RPCMode.Server, message);
-            Debug.Log("CLIENT SENT: " + message);
+            calibrate = true;
         }
     }
 
     [RPC]
-    void InMessage(string message) {
+    public void Focus(string message) {
         if (networkView.isMine) {
-            Debug.Log("SERVER RECEIVED: " + message);
+            networkView.RPC("Focus", RPCMode.Others, message);
         } else {
-            Debug.Log("CLIENT RECEIVED: " + message);
+            State = CursorState.Focus;
+        }
+    }
+
+    [RPC]
+    public void Unfocus(string message) {
+        if (networkView.isMine) {
+            networkView.RPC("Unocus", RPCMode.Others, message);
+        } else {
+            State = CursorState.Normal;
         }
     }
 
@@ -136,9 +160,9 @@ public class LOPCursor : MonoBehaviour {
     }
 
     void OnGUI() {
-        if (Network.isClient) {
-            if (GUI.Button(new Rect(10, 150, 150, 100), "recalibrate")) {
-                calibrate = true;
+        if (networkView.isMine) {
+            if (GUILayout.Button("Center cursor")) {
+                Calibrate(string.Empty);
             }
         }
     }
