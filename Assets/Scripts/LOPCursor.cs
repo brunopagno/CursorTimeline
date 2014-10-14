@@ -11,17 +11,18 @@ public class LOPCursor : MonoBehaviour {
 
     private Quaternion rotation;
     private Quaternion initialRotation;
+    private Vector3 position = Vector3.zero;
+    public Vector3 Position {
+        get {
+            return position;
+        }
+        set {
+            position.Set(value.x / Screen.width, value.y / Screen.height, 0);
+        }
+    }
     private bool calibrate;
     private Queue<Vector3> smoothingQueue = new Queue<Vector3>(16);
     private CursorState state;
-    private CursorState State {
-        get {
-            return state;
-        }
-        set {
-            state = value;
-        }
-    }
 
     public GameObject cursor;
     public Plane referencePlane;
@@ -38,7 +39,7 @@ public class LOPCursor : MonoBehaviour {
             }
         }
 
-        State = CursorState.Normal;
+        state = CursorState.Normal;
     }
 
     #region NetworkViewSync
@@ -47,8 +48,11 @@ public class LOPCursor : MonoBehaviour {
         if (stream.isWriting) {
             rotation = Input.gyro.attitude;
             stream.Serialize(ref rotation);
+            stream.Serialize(ref position);
         } else {
             stream.Serialize(ref rotation);
+            stream.Serialize(ref position);
+            Debug.Log("pos: " + position);
             if (calibrate) {
                 initialRotation = Quaternion.Inverse(rotation);
                 if (initialRotation.x != 0 || initialRotation.y != 0 || initialRotation.z != 0 || initialRotation.w != 0) {
@@ -75,6 +79,7 @@ public class LOPCursor : MonoBehaviour {
     #region TouchEvents
 
     private void OnTap(Touch touch) {
+        state = CursorState.Focus;
         Focus(string.Empty);
     }
 
@@ -82,9 +87,13 @@ public class LOPCursor : MonoBehaviour {
     }
 
     private void OnTouchMoved(Touch touch) {
+        if (state == CursorState.Focus) {
+            this.Position = touch.position;
+        }
     }
 
     private void OnUntap(Touch touch) {
+        state = CursorState.Normal;
         Unfocus(string.Empty);
     }
 
@@ -106,16 +115,16 @@ public class LOPCursor : MonoBehaviour {
         if (networkView.isMine) {
             networkView.RPC("Focus", RPCMode.Others, message);
         } else {
-            State = CursorState.Focus;
+            state = CursorState.Focus;
         }
     }
 
     [RPC]
     public void Unfocus(string message) {
         if (networkView.isMine) {
-            networkView.RPC("Unocus", RPCMode.Others, message);
+            networkView.RPC("Unfocus", RPCMode.Others, message);
         } else {
-            State = CursorState.Normal;
+            state = CursorState.Normal;
         }
     }
 
@@ -124,19 +133,25 @@ public class LOPCursor : MonoBehaviour {
     void Update() {
         if (Network.isServer) { // ON SERVER
             // GYRO
-            Vector3 direction = rotation * Vector3.down;
-            Ray ray = new Ray(Vector3.up * distance, direction);
-            float rayDistance = 0;
-            if (referencePlane.Raycast(ray, out rayDistance)) {
-                Vector3 point = ray.GetPoint(rayDistance);
-                smoothingQueue.Enqueue(new Vector3(-point.x, -point.z, 0));
-            }
+            if (state == CursorState.Normal) {
+                Vector3 direction = rotation * Vector3.down;
+                Ray ray = new Ray(Vector3.up * distance, direction);
+                float rayDistance = 0;
+                if (referencePlane.Raycast(ray, out rayDistance)) {
+                    Vector3 point = ray.GetPoint(rayDistance);
+                    smoothingQueue.Enqueue(new Vector3(-point.x, -point.z, 0));
+                }
 
-            if (smoothingQueue.Count >= 8) {
-                smoothingQueue.Dequeue();
+                if (smoothingQueue.Count >= 8) {
+                    smoothingQueue.Dequeue();
+                }
             }
 
             cursor.transform.position = MediumPosition();
+
+            if (state == CursorState.Focus) {
+                cursor.transform.position += Position;
+            }
         } else { // ON CLIENT
             // TOUCH
             foreach (Touch touch in Input.touches) {
@@ -164,6 +179,7 @@ public class LOPCursor : MonoBehaviour {
             if (GUILayout.Button("Center cursor")) {
                 Calibrate(string.Empty);
             }
+            //GUI.Label(new Rect(10, 280, 444, 333), screenMessage);
         }
     }
 }
