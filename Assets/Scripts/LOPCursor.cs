@@ -11,6 +11,9 @@ public class LOPCursor : MonoBehaviour {
 
     private Quaternion rotation;
     private Quaternion initialRotation;
+    private Plane referencePlane;
+    private int distance = 16;
+
     private Vector3 position = Vector3.zero;
     public Vector3 Position {
         get {
@@ -20,17 +23,18 @@ public class LOPCursor : MonoBehaviour {
             position.Set(value.x / Screen.width, value.y / Screen.height, 0);
         }
     }
+
     private bool calibrate;
     private Queue<Vector3> smoothingQueue = new Queue<Vector3>(16);
     private CursorState state;
+    private Vector2 cursorArea;
 
     public GameObject cursor;
-    public Plane referencePlane;
-    public int distance = 16;
 
     void Start() {
         calibrate = true;
         referencePlane = new Plane(Vector3.up, Vector3.zero);
+        cursorArea = new Vector2(2, 2);
 
         if (Network.isClient) {
             if (SystemInfo.supportsGyroscope) {
