@@ -42,3 +42,11 @@ TagManager:
     userID: 0
     uniqueID: 0
     locked: 0
+  - name: BehindCursor
+    userID: 1
+    uniqueID: 82415477
+    locked: 0
+  - name: Cursor
+    userID: 2
+    uniqueID: 1983569089
+    locked: 0

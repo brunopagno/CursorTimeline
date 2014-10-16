@@ -20,27 +20,34 @@ public class LOPCursor : MonoBehaviour {
             return position;
         }
         set {
-            position.Set(value.x / Screen.width, value.y / Screen.height, 0);
+            // goes from -1 to 1
+            position.Set(((value.x / Screen.width) - 0.5f) * 2, ((value.y / Screen.height) - 0.5f) * 2, 0);
+            screenMessage = "position set to: " + position;
         }
     }
 
+    private float zoomFactor = 0.5f;
     private bool calibrate;
     private Queue<Vector3> smoothingQueue = new Queue<Vector3>(16);
     private CursorState state;
-    private Vector2 cursorArea;
+    private Vector2 actionArea;
 
     public GameObject cursor;
+    public GameObject cursorArea;
+
+    private string screenMessage;
 
     void Start() {
         calibrate = true;
         referencePlane = new Plane(Vector3.up, Vector3.zero);
-        cursorArea = new Vector2(2, 2);
 
         if (Network.isClient) {
             if (SystemInfo.supportsGyroscope) {
                 Input.gyro.enabled = true;
                 Input.compass.enabled = true;
             }
+
+            SetupScreenSize(string.Empty);
         }
 
         state = CursorState.Normal;
@@ -56,7 +63,6 @@ public class LOPCursor : MonoBehaviour {
         } else {
             stream.Serialize(ref rotation);
             stream.Serialize(ref position);
-            Debug.Log("pos: " + position);
             if (calibrate) {
                 initialRotation = Quaternion.Inverse(rotation);
                 if (initialRotation.x != 0 || initialRotation.y != 0 || initialRotation.z != 0 || initialRotation.w != 0) {
@@ -104,6 +110,31 @@ public class LOPCursor : MonoBehaviour {
     #endregion
 
     #region Message Exchange
+
+    [RPC]
+    public void SetupScreenSize(string message) {
+        if (networkView.isMine) {
+            networkView.RPC("SetupScreenSize", RPCMode.Others, "" + Screen.width + "," + Screen.height);
+            actionArea = new Vector2(2, 2); // whatever, just make sure it's not null
+        } else {
+            
+            string[] resolution = message.Split(',');
+            float width = 0;
+            float height = 0;
+            Debug.Log("res: " + resolution[0] + ", " + resolution[1]);
+            if (float.TryParse(resolution[0], out width) && float.TryParse(resolution[1], out height)) {
+                float proportion = width + height;
+                actionArea = new Vector2(width / proportion, height / proportion) * 5;
+                Debug.Log("w: " + width + ", h: " + height + ", proportion: " + proportion);
+            } else {
+                actionArea = new Vector2(2, 2);
+            }
+            Bounds bounds = cursorArea.GetComponent<SpriteRenderer>().sprite.bounds;
+            cursorArea.transform.localScale.Set(actionArea.x, actionArea.y, 1);
+            Debug.Log("actionArea: " + actionArea);
+            Debug.Log("cursorArea: " + cursorArea.transform.localScale);
+        }
+    }
 
     [RPC]
     public void Calibrate(string message) {
@@ -154,7 +185,7 @@ public class LOPCursor : MonoBehaviour {
             cursor.transform.position = MediumPosition();
 
             if (state == CursorState.Focus) {
-                cursor.transform.position += Position;
+                cursor.transform.position += new Vector3(Position.x, position.y, 0);
             }
         } else { // ON CLIENT
             // TOUCH
@@ -175,6 +206,21 @@ public class LOPCursor : MonoBehaviour {
                         break;
                 }
             }
+            if (Input.touchCount == 2) {
+                Touch tZero = Input.GetTouch(0);
+                Touch tOne = Input.GetTouch(1);
+
+                Vector2 tZeroPrevPos = tZero.position - tZero.deltaPosition;
+                Vector2 tOnePrevPos = tOne.position - tOne.deltaPosition;
+
+                float prevDelta = (tZeroPrevPos - tOnePrevPos).magnitude;
+                float curDelta = (tZero.position - tOne.position).magnitude;
+
+                float deltaMagnitudeDiff = prevDelta - curDelta;
+                Bounds bounds = cursorArea.GetComponent<SpriteRenderer>().sprite.bounds;
+                actionArea.Set(actionArea.x + zoomFactor, actionArea.y + zoomFactor);
+                cursorArea.transform.localScale.Set(actionArea.x / bounds.size.x, actionArea.y / bounds.size.y, 1);
+            }
         }
     }
 
@@ -183,7 +229,7 @@ public class LOPCursor : MonoBehaviour {
             if (GUILayout.Button("Center cursor")) {
                 Calibrate(string.Empty);
             }
-            //GUI.Label(new Rect(10, 280, 444, 333), screenMessage);
+            GUI.Label(new Rect(10, 280, 444, 333), screenMessage);
         }
     }
 }
