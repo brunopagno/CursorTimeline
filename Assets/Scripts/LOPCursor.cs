@@ -22,20 +22,23 @@ public class LOPCursor : MonoBehaviour {
         set {
             // goes from -1 to 1
             position.Set(((value.x / Screen.width) - 0.5f) * 2, ((value.y / Screen.height) - 0.5f) * 2, 0);
-            screenMessage = "position set to: " + position;
         }
     }
 
     private float zoomFactor = 0.5f;
     private bool calibrate;
-    private Queue<Vector3> smoothingQueue = new Queue<Vector3>(16);
+    private Queue<Vector3> smoothingCursor = new Queue<Vector3>(16);
+    private Queue<Vector3> smoothingPosition = new Queue<Vector3>(16);
     private CursorState state;
     private Vector2 actionArea;
 
     public GameObject cursor;
     public GameObject cursorArea;
 
-    private string screenMessage;
+    private float fadeSpeed = .5f;
+    private float fadeTime = 1.5f;
+
+    //private string screenMessage;
 
     void Start() {
         calibrate = true;
@@ -73,17 +76,6 @@ public class LOPCursor : MonoBehaviour {
         }
     }
 
-    private Vector3 MediumPosition() {
-        float x = 0;
-        float y = 0;
-        foreach (Vector3 v in smoothingQueue.ToArray()) {
-            x += v.x;
-            y += v.y;
-        }
-
-        return new Vector3(x / smoothingQueue.Count, y / smoothingQueue.Count, 0);
-    }
-
     #endregion
 
     #region TouchEvents
@@ -117,22 +109,18 @@ public class LOPCursor : MonoBehaviour {
             networkView.RPC("SetupScreenSize", RPCMode.Others, "" + Screen.width + "," + Screen.height);
             actionArea = new Vector2(2, 2); // whatever, just make sure it's not null
         } else {
-            
+
             string[] resolution = message.Split(',');
             float width = 0;
             float height = 0;
-            Debug.Log("res: " + resolution[0] + ", " + resolution[1]);
             if (float.TryParse(resolution[0], out width) && float.TryParse(resolution[1], out height)) {
                 float proportion = width + height;
-                actionArea = new Vector2(width / proportion, height / proportion) * 5;
-                Debug.Log("w: " + width + ", h: " + height + ", proportion: " + proportion);
+                actionArea = Camera.main.ScreenToWorldPoint(new Vector2(width / proportion, height / proportion));
             } else {
                 actionArea = new Vector2(2, 2);
             }
             Bounds bounds = cursorArea.GetComponent<SpriteRenderer>().sprite.bounds;
-            cursorArea.transform.localScale.Set(actionArea.x, actionArea.y, 1);
-            Debug.Log("actionArea: " + actionArea);
-            Debug.Log("cursorArea: " + cursorArea.transform.localScale);
+            cursorArea.transform.localScale = new Vector3(actionArea.x, actionArea.y, 1);
         }
     }
 
@@ -167,28 +155,41 @@ public class LOPCursor : MonoBehaviour {
 
     void Update() {
         if (Network.isServer) { // ON SERVER
-            // GYRO
             if (state == CursorState.Normal) {
                 Vector3 direction = rotation * Vector3.down;
                 Ray ray = new Ray(Vector3.up * distance, direction);
                 float rayDistance = 0;
                 if (referencePlane.Raycast(ray, out rayDistance)) {
                     Vector3 point = ray.GetPoint(rayDistance);
-                    smoothingQueue.Enqueue(new Vector3(-point.x, -point.z, 0));
+                    smoothingCursor.Enqueue(new Vector3(-point.x, -point.z, 0));
                 }
 
-                if (smoothingQueue.Count >= 8) {
-                    smoothingQueue.Dequeue();
+                if (smoothingCursor.Count >= 8) {
+                    smoothingCursor.Dequeue();
                 }
             }
 
-            cursor.transform.position = MediumPosition();
+            transform.position = SmoothFilter(smoothingCursor.ToArray());
 
             if (state == CursorState.Focus) {
-                cursor.transform.position += new Vector3(Position.x, position.y, 0);
+                smoothingPosition.Enqueue(new Vector3(Position.x, Position.y, 0));
+
+                if (smoothingPosition.Count >= 8) {
+                    smoothingPosition.Dequeue();
+                }
+                cursor.transform.position = transform.position + SmoothFilter(smoothingPosition.ToArray());
+            }
+
+            // cursor area animation
+            if (state == CursorState.Normal) {
+                float fade = Mathf.SmoothDamp(0f, 1f, ref fadeSpeed, fadeTime);
+                cursorArea.GetComponent<SpriteRenderer>().color = new Color(1f, 1f, 1f, fade);
+            }
+            if (state == CursorState.Focus) {
+                float fade = Mathf.SmoothDamp(1f, 0f, ref fadeSpeed, fadeTime);
+                cursorArea.GetComponent<SpriteRenderer>().color = new Color(1f, 1f, 1f, fade);
             }
         } else { // ON CLIENT
-            // TOUCH
             foreach (Touch touch in Input.touches) {
                 switch (touch.phase) {
                     case TouchPhase.Began:
@@ -224,12 +225,23 @@ public class LOPCursor : MonoBehaviour {
         }
     }
 
+    private Vector3 SmoothFilter(Vector3[] array) {
+        float x = 0;
+        float y = 0;
+        foreach (Vector3 v in array) {
+            x += v.x;
+            y += v.y;
+        }
+
+        return new Vector3(x / array.Length, y / array.Length, 0);
+    }
+
     void OnGUI() {
         if (networkView.isMine) {
             if (GUILayout.Button("Center cursor")) {
                 Calibrate(string.Empty);
             }
-            GUI.Label(new Rect(10, 280, 444, 333), screenMessage);
+            //GUI.Label(new Rect(10, 280, 444, 333), screenMessage);
         }
     }
 }
