@@ -109,18 +109,18 @@ public class LOPCursor : MonoBehaviour {
             networkView.RPC("SetupScreenSize", RPCMode.Others, "" + Screen.width + "," + Screen.height);
             actionArea = new Vector2(2, 2); // whatever, just make sure it's not null
         } else {
-
             string[] resolution = message.Split(',');
             float width = 0;
             float height = 0;
             if (float.TryParse(resolution[0], out width) && float.TryParse(resolution[1], out height)) {
                 float proportion = width + height;
-                actionArea = Camera.main.ScreenToWorldPoint(new Vector2(width / proportion, height / proportion));
+                actionArea = new Vector2(width / proportion, height / proportion) * 4;
             } else {
                 actionArea = new Vector2(2, 2);
             }
-            Bounds bounds = cursorArea.GetComponent<SpriteRenderer>().sprite.bounds;
-            cursorArea.transform.localScale = new Vector3(actionArea.x, actionArea.y, 1);
+            cursorArea.transform.localScale = new Vector3(width / actionArea.x, height / actionArea.y, 1);
+            Debug.Log("action_area: " + actionArea);
+            Debug.Log("local_scale: " + cursorArea.transform.localScale);
         }
     }
 
@@ -172,7 +172,7 @@ public class LOPCursor : MonoBehaviour {
             transform.position = SmoothFilter(smoothingCursor.ToArray());
 
             if (state == CursorState.Focus) {
-                smoothingPosition.Enqueue(new Vector3(Position.x, Position.y, 0));
+                smoothingPosition.Enqueue(new Vector3(Position.x * actionArea.x, Position.y * actionArea.y, 0));
 
                 if (smoothingPosition.Count >= 8) {
                     smoothingPosition.Dequeue();
