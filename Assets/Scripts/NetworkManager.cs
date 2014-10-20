@@ -8,7 +8,7 @@ public class NetworkManager : MonoBehaviour {
     private HostData[] hostList;
 
     // "143.54.13.225" UFRGS
-    private string ip = "192.168.1.4";
+    private string ip = "192.168.1.3";
     private int port = 19876; // this is the game port
     private int maxConnections = 4;
 

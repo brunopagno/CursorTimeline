@@ -36,7 +36,7 @@ public class LOPCursor : MonoBehaviour {
     public GameObject cursorArea;
 
     private float fadeSpeed = .5f;
-    private float fadeTime = 1.5f;
+    private float fadeTime = 3.5f;
 
     //private string screenMessage;
 
@@ -49,8 +49,10 @@ public class LOPCursor : MonoBehaviour {
                 Input.gyro.enabled = true;
                 Input.compass.enabled = true;
             }
-
-            SetupScreenSize(string.Empty);
+        } else {
+            actionArea = new Vector2(1f, 1f);
+            float scale = Screen.height / Camera.main.orthographicSize * 3.2f;
+            cursorArea.transform.localScale = new Vector3(scale * actionArea.x, scale * actionArea.y, 1);
         }
 
         state = CursorState.Normal;
@@ -104,27 +106,6 @@ public class LOPCursor : MonoBehaviour {
     #region Message Exchange
 
     [RPC]
-    public void SetupScreenSize(string message) {
-        if (networkView.isMine) {
-            networkView.RPC("SetupScreenSize", RPCMode.Others, "" + Screen.width + "," + Screen.height);
-            actionArea = new Vector2(2, 2); // whatever, just make sure it's not null
-        } else {
-            string[] resolution = message.Split(',');
-            float width = 0;
-            float height = 0;
-            if (float.TryParse(resolution[0], out width) && float.TryParse(resolution[1], out height)) {
-                float proportion = width + height;
-                actionArea = new Vector2(width / proportion, height / proportion) * 4;
-            } else {
-                actionArea = new Vector2(2, 2);
-            }
-            cursorArea.transform.localScale = new Vector3(width / actionArea.x, height / actionArea.y, 1);
-            Debug.Log("action_area: " + actionArea);
-            Debug.Log("local_scale: " + cursorArea.transform.localScale);
-        }
-    }
-
-    [RPC]
     public void Calibrate(string message) {
         if (networkView.isMine) {
             networkView.RPC("Calibrate", RPCMode.Others, message);
@@ -148,6 +129,23 @@ public class LOPCursor : MonoBehaviour {
             networkView.RPC("Unfocus", RPCMode.Others, message);
         } else {
             state = CursorState.Normal;
+            cursor.transform.position = transform.position;
+        }
+    }
+
+    [RPC]
+    public void ChangeCursorArea(string message) {
+        if (networkView.isMine) {
+            networkView.RPC("ChangeCursorArea", RPCMode.Others, message);
+        } else {
+            Debug.Log("deltaMagnitudeDiff: " + message);
+            float delta = 0;
+            if (float.TryParse(message, out delta)) {
+                float scale = Screen.height / Camera.main.orthographicSize * 3.2f;
+                actionArea.x += delta;
+                actionArea.y += delta;
+                cursorArea.transform.localScale = new Vector3(scale * actionArea.x, scale * actionArea.y, 1);
+            }
         }
     }
 
@@ -207,6 +205,7 @@ public class LOPCursor : MonoBehaviour {
                         break;
                 }
             }
+
             if (Input.touchCount == 2) {
                 Touch tZero = Input.GetTouch(0);
                 Touch tOne = Input.GetTouch(1);
@@ -217,10 +216,8 @@ public class LOPCursor : MonoBehaviour {
                 float prevDelta = (tZeroPrevPos - tOnePrevPos).magnitude;
                 float curDelta = (tZero.position - tOne.position).magnitude;
 
-                float deltaMagnitudeDiff = prevDelta - curDelta;
-                Bounds bounds = cursorArea.GetComponent<SpriteRenderer>().sprite.bounds;
-                actionArea.Set(actionArea.x + zoomFactor, actionArea.y + zoomFactor);
-                cursorArea.transform.localScale.Set(actionArea.x / bounds.size.x, actionArea.y / bounds.size.y, 1);
+                float deltaMagnitudeDiff = curDelta - prevDelta;
+                ChangeCursorArea("" + deltaMagnitudeDiff / 100.0);
             }
         }
     }
