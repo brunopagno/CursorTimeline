@@ -25,7 +25,6 @@ public class LOPCursor : MonoBehaviour {
         }
     }
 
-    private float zoomFactor = 0.5f;
     private bool calibrate;
     private Queue<Vector3> smoothingCursor = new Queue<Vector3>(16);
     private Queue<Vector3> smoothingPosition = new Queue<Vector3>(16);
@@ -51,7 +50,7 @@ public class LOPCursor : MonoBehaviour {
             }
         } else {
             actionArea = new Vector2(1f, 1f);
-            float scale = Screen.height / Camera.main.orthographicSize * 3.2f;
+            float scale = Screen.height / Camera.main.orthographicSize * 2;
             cursorArea.transform.localScale = new Vector3(scale * actionArea.x, scale * actionArea.y, 1);
         }
 
@@ -141,9 +140,15 @@ public class LOPCursor : MonoBehaviour {
             Debug.Log("deltaMagnitudeDiff: " + message);
             float delta = 0;
             if (float.TryParse(message, out delta)) {
-                float scale = Screen.height / Camera.main.orthographicSize * 3.2f;
                 actionArea.x += delta;
                 actionArea.y += delta;
+                if (actionArea.x < 1) {
+                    actionArea.Set(1, actionArea.y);
+                }
+                if (actionArea.y < 1) {
+                    actionArea.Set(actionArea.x, 1);
+                }
+                float scale = Camera.main.WorldToScreenPoint(new Vector3(0, 1, 0)).y;
                 cursorArea.transform.localScale = new Vector3(scale * actionArea.x, scale * actionArea.y, 1);
             }
         }
