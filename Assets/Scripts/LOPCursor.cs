@@ -173,6 +173,20 @@ public class LOPCursor : MonoBehaviour {
             }
 
             transform.position = SmoothFilter(smoothingCursor.ToArray());
+            Vector2 max = new Vector2(Camera.main.orthographicSize * Camera.main.aspect, Camera.main.orthographicSize);
+            Vector2 min = new Vector2(-max.x, -max.y);
+            if (transform.position.x > max.x) {
+                transform.position = new Vector3(max.x, transform.position.y, transform.position.z);
+            }
+            if (transform.position.x < min.x) {
+                transform.position = new Vector3(min.x, transform.position.y, transform.position.z);
+            }
+            if (transform.position.y > max.y) {
+                transform.position = new Vector3(transform.position.x, max.y, transform.position.z);
+            }
+            if (transform.position.y < min.y) {
+                transform.position = new Vector3(transform.position.x, min.y, transform.position.z);
+            }
 
             if (state == CursorState.Focus) {
                 smoothingPosition.Enqueue(new Vector3(Position.x * actionArea.x, Position.y * actionArea.y, 0));
